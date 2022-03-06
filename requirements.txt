@@ -1,0 +1,17 @@
+click==8.0.4
+dataclasses==0.8
+Flask==2.0.3
+Flask-Cors==3.0.10
+Flask-PyMongo==2.3.0
+flask-serialize==2.0.3
+importlib-metadata==4.8.3
+itsdangerous==2.0.1
+Jinja2==3.0.3
+MarkupSafe==2.0.1
+permissive-dict==1.0.4
+pkg-resources==0.0.0
+pymongo==4.0.2
+six==1.16.0
+typing-extensions==4.1.1
+Werkzeug==2.0.3
+zipp==3.6.0
