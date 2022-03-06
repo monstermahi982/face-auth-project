@@ -1,9 +1,12 @@
-from flask import Flask,Response,request, jsonify
+from flask import Flask,Response,request, jsonify, redirect, url_for
 # import pymongo
 import json
 from flask_serialize import FlaskSerialize
 from flask_pymongo import PyMongo, ObjectId
 from bson.json_util import dumps
+from werkzeug.utils import secure_filename
+import os
+import face_recognition
 
 app = Flask(__name__)
 app.secret_key = "secret key"
@@ -11,85 +14,177 @@ app.config['MONGO_URI'] = "mongodb://localhost:27017/face_auth"
 mongo = PyMongo(app)
 db = mongo.db.face_auth
 
+UPLOAD_FOLDER = '/home/mahesh/projects/final_year_project/static/uploads'
+TEMP_FOLDER = '/home/mahesh/projects/final_year_project/static/temp_uploads'
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
+
+# app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['TEMP_FOLDER'] = TEMP_FOLDER
+
 @app.route("/user",methods=["GET", "POST"])
 def users():
+    
     if request.method == "POST":
+    
         try:
             result = db.insert_one(request.json)
             return jsonify({'msg': 'data inserted'})
+    
         except Exception as ex:
-            print(ex)
             return jsonify({'Message':"Something went wrong"})
+    
     elif request.method == "GET":
+    
         try:
+    
             data =list(db.find())
             for user in data:
                 user["_id"]= str(ObjectId(user["_id"]))
             return jsonify(data)
+    
         except Exception as ex:
-            print(ex)
             return jsonify({'Message':"Something went wrong"})
 
 @app.route("/user/<id>",methods=["GET", "PUT", "DELETE"])
 def one_user(id):
+    
     if request.method == "PUT":
+    
         try:
+    
             db.update_one({'_id':ObjectId(id)}, {'$set': {
                 'name':request.json['name'],
                 'gmail':request.json['gmail']
             }})
             return jsonify({'Message':"User Updated"})
+    
         except Exception as ex:
-            print(ex)
             return jsonify({'Message':"Something went wrong"})
+    
     elif request.method == "GET":
+    
         try:
+    
             user = db.find_one({'_id':ObjectId(id)})
+    
             return jsonify({
                 '_id':str(ObjectId(user['_id'])),
                 'name':user['name']
             })
+    
         except Exception as ex:
-            print(ex)
             return jsonify({'Message':"Something went wrong"})
+    
     elif request.method == "DELETE":
+    
         try:
             db.delete_one({'_id':ObjectId(id)})
             return jsonify({'Message':"User Deleted"})
+    
         except Exception as ex:
-            print(ex)
             return jsonify({'Message':"Something went wrong"})
 
+# checking file extension
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route("/file",methods=["GET", "POST", "DELETE"])
+def upload_file():
+
+    if request.method == 'POST':
+        
+        # checking file data there or not
+        if 'file' not in request.files:
+            return jsonify({"data":"no file found"})
+        file = request.files['file']
+        
+        # checking file exists or not
+        if file.filename == '':
+            return jsonify({"data":"No selected file"})
+        
+        if file and allowed_file(file.filename):
+            
+            filename = secure_filename(file.filename)
+            
+            # uploading file
+            
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            
+            # checking face in pic
+            try:
+
+                check_face = face_recognition.load_image_file("./static/uploads/" + filename)
+                check_face_encoding = face_recognition.face_encodings(check_face)[0]
+            
+            except Exception as ex:
+            
+                # removing file from uploads folder
+                pic_path = os.path.exists("./static/uploads/" + filename)
+                if pic_path:
+                    os.remove("./static/uploads/" + filename)
+            
+                return jsonify({"data":"no face found"})
+
+            return jsonify({"data" : "file uploaded"})
+    
+    return jsonify({"data": "method not allowed"})
+
+
+@app.route("/login", methods=["POST"])
+def user_login():
+    
+    if request.method == 'POST':
+    
+        if 'file' not in request.files:
+            return jsonify({"data":"no file found"})
+    
+        file = request.files['file']
+    
+        if file.filename == '':
+            return jsonify({"data":"No selected file"})
+    
+        if file and allowed_file(file.filename):
+    
+            filename = secure_filename(file.filename)
+            file.save(os.path.join(app.config['TEMP_FOLDER'], filename))
+
+            try:
+    
+                db_pic = face_recognition.load_image_file("./static/uploads/kunal.jpeg")
+                db_pic_encode = face_recognition.face_encodings(db_pic)[0]
+    
+            except Exception as ex:
+                return jsonify({"data" : "no face found in db"})
+
+            try:
+    
+                current_pic = face_recognition.load_image_file("./static/temp_uploads/" + filename)
+                current_pic_encode = face_recognition.face_encodings(current_pic)[0]
+
+                pic_path = os.path.exists("./static/temp_uploads/" + filename)
+                if pic_path:
+                    os.remove("./static/temp_uploads/" + filename)
+
+            except Exception as ex:
+    
+                pic_path = os.path.exists("./static/temp_uploads/" + filename)
+                if pic_path:
+                    os.remove("./static/temp_uploads/" + filename)
+    
+                return jsonify({"data" : "no face found"})
+
+            results = face_recognition.compare_faces([db_pic_encode], current_pic_encode)
+
+            if results[0] == True:
+                return jsonify({"data": "face matched"})
+            else:
+                return jsonify({"data": "face not matched"})
+
+            return jsonify({"data":filename})
+        
+    return jsonify({"data": "method not allowed"})
+
 if __name__ == '__main__':
-    app.run(debug=True)    
-
-
-# from flask import Flask, redirect, url_for
-# from pymongo import MongoClient
-# from flask_cors import CORS, cross_origin
-# import json
-
-# app = Flask(__name__)
-# cors = CORS(app)
-# app.config['CORS_HEADERS'] = 'Content-Type'
-
-
-# mongoClient = MongoClient('mongodb://127.0.0.1:27017')
-# db = mongoClient.get_database('face_auth')
-# names_col = db.get_collection('users')
-
-# @app.route('/addname/<name>/', methods=["POST"])
-# def addname(name):
-#     names_col.insert_one({"name": name.lower()})
-#     return redirect(url_for('getnames'))
-
-# @app.route('/getnames/')
-# def getnames():
-#     names_json = []
-#     if names_col.find({}):
-#         for name in names_col.find({}).sort("name"):
-#             names_json.append({"name": name['name'], "id": str(name['_id'])})
-#     return json.dumps(names_json)
-
-# if __name__ == "__main__":
-#     app.run(debug=True)
+    app.run(debug=True)
