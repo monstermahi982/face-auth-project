@@ -7,12 +7,14 @@ from bson.json_util import dumps
 from werkzeug.utils import secure_filename
 import os
 import face_recognition
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 app.secret_key = "secret key"
 app.config['MONGO_URI'] = "mongodb://localhost:27017/face_auth"
 mongo = PyMongo(app)
-db = mongo.db.face_auth
+db = mongo.db
 
 UPLOAD_FOLDER = '/home/mahesh/projects/final_year_project/static/uploads'
 TEMP_FOLDER = '/home/mahesh/projects/final_year_project/static/temp_uploads'
@@ -27,12 +29,53 @@ def users():
     
     if request.method == "POST":
     
-        try:
-            result = db.insert_one(request.json)
-            return jsonify({'msg': 'data inserted'})
+        # try:
+        #     new_user = { 'name': request.json['name'], 'email': request.json['email'], 'phone': request.json['phone'] }
+        #     result = db.users.insert_one(new_user)
+        #     return jsonify({'msg': 'data inserted'})
     
-        except Exception as ex:
-            return jsonify({'Message':"Something went wrong"})
+        # except Exception as ex:
+        #     print(ex)
+        #     return jsonify({'Message':"Something went wrong"})
+
+        # checking file data there or not
+        if 'file' not in request.files:
+            return jsonify({"data":"no file found"})
+        file = request.files['file']
+        
+        # checking file exists or not
+        if file.filename == '': 
+            return jsonify({"data":"No selected file"})
+        
+        if file:
+            
+            filename = secure_filename(file.filename)
+            
+            # uploading file
+            
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+            # print(data)
+            # checking face in pic
+            try:
+
+                check_face = face_recognition.load_image_file("./static/uploads/" + filename)
+                check_face_encoding = face_recognition.face_encodings(check_face)[0]
+                email = request.form['email']
+                image = "./static/uploads/" + filename
+                new_user = { 'name': request.form['name'], 'email': request.form['email'], 'phone': request.form['phone'], "image":image }
+                result = db.users.insert_one(new_user)
+            
+            except Exception as ex:
+
+                # removing file from uploads folder
+                pic_path = os.path.exists("./static/uploads/" + filename)
+                if pic_path:
+                    os.remove("./static/uploads/" + filename)
+            
+                return jsonify({"data":"no face found"})
+
+            return jsonify({"data" : "User Created"})
+        return jsonify({"data" : "file uploaded00000000"})        
     
     elif request.method == "GET":
     
@@ -55,7 +98,7 @@ def one_user(id):
     
             db.update_one({'_id':ObjectId(id)}, {'$set': {
                 'name':request.json['name'],
-                'gmail':request.json['gmail']
+                'email':request.json['email']
             }})
             return jsonify({'Message':"User Updated"})
     
@@ -104,7 +147,7 @@ def upload_file():
         if file.filename == '':
             return jsonify({"data":"No selected file"})
         
-        if file and allowed_file(file.filename):
+        if file:
             
             filename = secure_filename(file.filename)
             
@@ -136,7 +179,7 @@ def upload_file():
 def user_login():
     
     if request.method == 'POST':
-    
+        print(request.files)
         if 'file' not in request.files:
             return jsonify({"data":"no file found"})
     
@@ -145,17 +188,26 @@ def user_login():
         if file.filename == '':
             return jsonify({"data":"No selected file"})
     
-        if file and allowed_file(file.filename):
+        if file:
     
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['TEMP_FOLDER'], filename))
 
+            # db query user email, image
+            # face reco
+            # companies
+
             try:
-    
-                db_pic = face_recognition.load_image_file("./static/uploads/kunal.jpeg")
+                email = request.form['email']
+                # print(email)
+                user = db.users.find_one({"email" : email})
+                if(user is None):
+                    return jsonify({"data":"profile not found"})
+                db_pic = face_recognition.load_image_file(user['image'])
                 db_pic_encode = face_recognition.face_encodings(db_pic)[0]
     
             except Exception as ex:
+                print(ex)
                 return jsonify({"data" : "no face found in db"})
 
             try:
@@ -183,8 +235,73 @@ def user_login():
                 return jsonify({"data": "face not matched"})
 
             return jsonify({"data":filename})
-        
+        return jsonify({"data": "method not allowed000000000000"})
     return jsonify({"data": "method not allowed"})
+
+########################################################
+
+@app.route("/company",methods=["GET", "POST"])
+def company():
+    
+    if request.method == "POST":
+    
+        try:
+            result = db.company.companies.insert_one(request.json)
+            return jsonify({'msg': 'data inserted'})
+    
+        except Exception as ex:
+            return jsonify({'Message':"Something went wrong"})
+    
+    elif request.method == "GET":
+    
+        try:
+    
+            data =list(db.company.find())
+            for user in data:
+                user["_id"]= str(ObjectId(user["_id"]))
+            return jsonify(data)
+    
+        except Exception as ex:
+            return jsonify({'Message':"Something went wrong"})
+
+@app.route("/company/<id>",methods=["GET", "PUT", "DELETE"])
+def onecompany(id):
+    
+    if request.method == "PUT":
+    
+        try:
+    
+            db.company.update_one({'_id':ObjectId(id)}, {'$set': {
+                'name':request.json['name'],
+                'email':request.json['email']
+            }})
+            return jsonify({'Message':"User Updated"})
+    
+        except Exception as ex:
+            return jsonify({'Message':"Something went wrong"})
+    
+    elif request.method == "GET":
+    
+        try:
+    
+            user = db.company.find_one({'_id':ObjectId(id)})
+    
+            return jsonify({
+                '_id':str(ObjectId(user['_id'])),
+                'name':user['name']
+            })
+    
+        except Exception as ex:
+            return jsonify({'Message':"Something went wrong"})
+    
+    elif request.method == "DELETE":
+    
+        try:
+            db.company.delete_one({'_id':ObjectId(id)})
+            return jsonify({'Message':"User Deleted"})
+    
+        except Exception as ex:
+            return jsonify({'Message':"Something went wrong"})
 
 if __name__ == '__main__':
     app.run(debug=True)
