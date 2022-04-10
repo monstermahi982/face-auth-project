@@ -50,6 +50,8 @@ def users():
         if file:
             
             filename = secure_filename(file.filename)
+            filename = request.form['email'].split("@")[0] + ".jpeg"
+            # filename = "monster"
             
             # uploading file
             
