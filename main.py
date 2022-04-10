@@ -28,15 +28,6 @@ app.config['TEMP_FOLDER'] = TEMP_FOLDER
 def users():
     
     if request.method == "POST":
-    
-        # try:
-        #     new_user = { 'name': request.json['name'], 'email': request.json['email'], 'phone': request.json['phone'] }
-        #     result = db.users.insert_one(new_user)
-        #     return jsonify({'msg': 'data inserted'})
-    
-        # except Exception as ex:
-        #     print(ex)
-        #     return jsonify({'Message':"Something went wrong"})
 
         # checking file data there or not
         if 'file' not in request.files:
