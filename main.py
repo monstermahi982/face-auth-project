@@ -246,10 +246,12 @@ def company():
     if request.method == "POST":
     
         try:
-            result = db.company.companies.insert_one(request.json)
-            return jsonify({'msg': 'data inserted'})
+            result = db.companies.insert_one(request.json)
+            company = db.companies.find_one({'email': request.json['email']})   
+            return dumps(company)
     
         except Exception as ex:
+            print(ex)
             return jsonify({'Message':"Something went wrong"})
     
     elif request.method == "GET":
