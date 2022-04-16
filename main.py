@@ -89,14 +89,18 @@ def one_user(id):
     
         try:
     
-            db.users.update_one({'_id':ObjectId(id)}, {'$set': {
+            data = db.users.update_one({'_id':ObjectId(id)}, {'$set': {
                 'name':request.json['name'],
                 'email':request.json['email'],
                 'phone':request.json['phone'],
             }})
+
+            print(request.json, id)
+            print(data)
             return jsonify({'Message':"User Updated"})
     
         except Exception as ex:
+            print(ex)
             return jsonify({'Message':"Something went wrong"})
     
     elif request.method == "GET":
