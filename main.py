@@ -8,11 +8,8 @@ from werkzeug.utils import secure_filename
 import os
 import face_recognition
 from flask_cors import CORS
-import random
-import datetime
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from flask_expects_json import expects_json
 
 app = Flask(__name__)
 CORS(app)
@@ -46,16 +43,6 @@ ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['TEMP_FOLDER'] = TEMP_FOLDER
 
-class MongoAPI:
-    def __init__(self, data):
-        self.client = MongoClient("mongodb://localhost:27017/")  
-      
-        database = data['face_auth']
-        collection = data['users']
-        cursor = self.client[database]
-        self.collection = cursor[collection]
-        self.data = data
-
 @app.route("/user",methods=["GET", "POST"])
 @limiter.limit("100 per minute")
 def users():
@@ -86,15 +73,14 @@ def users():
 
                 check_face = face_recognition.load_image_file("./static/uploads/" + filename)
                 check_face_encoding = face_recognition.face_encodings(check_face)[0]
-                print(check_face_encoding)
                 email = request.form['email']
                 password = request.form['password']
                 image = "./static/uploads/" + filename
                 new_user = { 'name': request.form['name'], 'email': email, 'password' : password , 'phone': request.form['phone'], "image":image, 'createdAt': datetime.datetime.now(), 'updatedAt' : datetime.datetime.now() }
                 result = db.users.insert_one(new_user)
-                print(datetime.datetime.now())
+            
             except Exception as ex:
-                
+
                 # removing file from uploads folder
                 pic_path = os.path.exists("./static/uploads/" + filename)
                 if pic_path:
@@ -129,9 +115,8 @@ def one_user(id):
                 'name':request.json['name'],
                 'email':request.json['email'],
                 'phone':request.json['phone'],
-                'updatedAt' : datetime.datetime.now()
             }})
-            print(datetime.datetime.now())
+
             print(request.json, id)
             print(data)
             return jsonify({'Message':"User Updated"})
@@ -150,9 +135,7 @@ def one_user(id):
                 '_id':str(ObjectId(user['_id'])),
                 'name':user['name'],
                 'email':user['email'],
-                'phone':user['phone'],
-                'image': 'http://localhost:5000' + user['image'].split('.')[1] + '.' +user['image'].split('.')[2],
-                'createdAt': user['createdAt']
+                'phone':user['phone']
             })
     
         except Exception as ex:
@@ -269,29 +252,18 @@ def user_login():
             filename = secure_filename(file.filename)
             file.save(os.path.join(app.config['TEMP_FOLDER'], filename))
 
+            # db query user email, image
+            # face reco
+            # companies
+
             try:
                 email = request.form['email']
                 token = request.form['token']
                 print(email + " " + token)
                 
                 user = db.users.find_one({"email" : email})
-                
-                updatedAt = user['updatedAt']
-                print(updatedAt)
-
-                diff = int(timeDifference(datetime.datetime.now() ,updatedAt))
-                if(diff > 30):
-                    return jsonify({"message" : "generate new token"})
-
-                # checking user exists
                 if(user is None):
                     return jsonify({"data":"email not found"})
-                
-                # checking token is same or not
-                if( int(token) != user['token']):
-                    return jsonify({"message": "token not matched"})
-                
-                # doing ml in db pic    
                 db_pic = face_recognition.load_image_file(user['image'])
                 db_pic_encode = face_recognition.face_encodings(db_pic)[0]
     
@@ -317,16 +289,9 @@ def user_login():
                 return jsonify({"data" : "no face found"})
 
             results = face_recognition.compare_faces([db_pic_encode], current_pic_encode)
-            
+            print(user['_id'])
             if results[0] == True:
-                return jsonify({
-                    'company_id':str(ObjectId(user['_id'])),
-                    'name':user['name'],
-                    'email':user['email'],
-                    'phone':user['phone'],
-                    'image': 'http://localhost:5000' + user['image'].split('.')[1] + '.' +user['image'].split('.')[2],
-                    'createdAt': user['createdAt']
-                })
+                return dumps(user)
             else:
                 return jsonify({"data": "face not matched"})
 
@@ -400,7 +365,7 @@ def company():
     
         try:
     
-            data =list(db.companies.find())
+            data =list(db.company.find())
             for user in data:
                 user["_id"]= str(ObjectId(user["_id"]))
             return jsonify(data)
